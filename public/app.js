@@ -14,7 +14,6 @@
 
   const elements = {
     nav: document.querySelector("#meal-nav"),
-    crumb: document.querySelector("#crumb-meal"),
     grid: document.querySelector("#function-grid"),
     title: document.querySelector("#section-title"),
     mealMiniIcon: document.querySelector("#meal-mini-icon"),
@@ -116,7 +115,6 @@
 
   function render() {
     const meal = meals.find(item => item.id === state.meal) || meals[0];
-    elements.crumb.textContent = meal.label;
     elements.title.textContent = meal.label;
     elements.mealMiniIcon.innerHTML = `<span class="meal-emoji" aria-hidden="true">${meal.icon}</span>`;
     elements.kicker.textContent = meal.label.toLocaleUpperCase("pt-BR");
