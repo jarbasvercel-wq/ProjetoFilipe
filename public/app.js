@@ -9,7 +9,8 @@
   ];
   const letters = ["A", "B", "C", "D"];
   const storageKey = "meu-dia-notas-v2";
-  const state = { meal: meals[0].id, data: loadData(), toastTimer: null };
+  const state = { meal: meals[0].id, data: {}, connected: false, busy: false, syncing: false, editing: false, snapshot: null, toastTimer: null };
+  const localNotes = loadLocalData();
 
   const elements = {
     nav: document.querySelector("#meal-nav"),
@@ -22,7 +23,7 @@
     toast: document.querySelector("#toast"),
   };
 
-  function loadData() {
+  function loadLocalData() {
     try {
       const current = localStorage.getItem(storageKey);
       if (current !== null) {
@@ -49,15 +50,6 @@
       return merged;
     } catch {
       return {};
-    }
-  }
-
-  function saveData() {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(state.data));
-      document.querySelector(".status-dot")?.setAttribute("title", "Salvo neste navegador");
-    } catch {
-      announce("Não foi possível salvar. Verifique o espaço disponível no navegador.");
     }
   }
 
@@ -96,10 +88,10 @@
   function renderTopic(item, mealId, letter, index) {
     return `<li class="topic-row" data-topic-index="${index}">
       <span class="topic-bullet" aria-hidden="true"></span>
-      <span class="topic-text">${safeText(item)}</span>
+      <span class="topic-text">${safeText(item.text)}</span>
       <span class="topic-actions">
-        <button class="mini-action edit" type="button" aria-label="Editar tópico: ${safeText(item)}" title="Editar" data-action="edit" data-meal="${mealId}" data-letter="${letter}" data-index="${index}">${actionIcon("edit")}</button>
-        <button class="mini-action delete" type="button" aria-label="Excluir tópico: ${safeText(item)}" title="Excluir" data-action="delete" data-meal="${mealId}" data-letter="${letter}" data-index="${index}">${actionIcon("delete")}</button>
+        <button class="mini-action edit" type="button" aria-label="Editar tópico: ${safeText(item.text)}" title="Editar" data-action="edit" data-meal="${mealId}" data-letter="${letter}" data-index="${index}">${actionIcon("edit")}</button>
+        <button class="mini-action delete" type="button" aria-label="Excluir tópico: ${safeText(item.text)}" title="Excluir" data-action="delete" data-meal="${mealId}" data-letter="${letter}" data-index="${index}">${actionIcon("delete")}</button>
       </span>
     </li>`;
   }
@@ -117,7 +109,7 @@
       ${list}
       <form class="add-topic-form" data-meal="${meal.id}" data-letter="${letter}">
         <input class="add-topic-input" name="topic" maxlength="240" autocomplete="off" aria-label="Novo tópico para função ${letter} em ${meal.label}" placeholder="Escreva um tópico..." />
-        <button class="add-topic-button" type="submit" aria-label="Adicionar tópico à função ${letter}" title="Adicionar tópico"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+        <button class="add-topic-button" ${!state.connected || state.busy ? "disabled" : ""} type="submit" aria-label="Adicionar tópico à função ${letter}" title="Adicionar tópico"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
       </form>
     </article>`;
   }
@@ -133,75 +125,172 @@
     renderNav();
   }
 
-  function setTopics(mealId, letter, items) {
-    if (!state.data[mealId]) state.data[mealId] = {};
-    state.data[mealId][letter] = items;
-    saveData();
-    render();
-  }
-
   function announce(message) {
     elements.toast.textContent = message;
     elements.toast.classList.add("visible");
     window.clearTimeout(state.toastTimer);
-    state.toastTimer = window.setTimeout(() => elements.toast.classList.remove("visible"), 1900);
+    state.toastTimer = window.setTimeout(() => elements.toast.classList.remove("visible"), 3500);
+  }
+
+  function connectionStatus(message) {
+    document.querySelector("#sync-status").textContent = message;
+    document.querySelector("#sync-status").setAttribute("role", "status");
+    document.querySelector("#import-local").disabled = !state.connected || state.busy;
+  }
+
+  async function request(method = "GET", body) {
+    const response = await fetch("/api/notes", {
+      method, cache: "no-store",
+      headers: body ? {"Content-Type": "application/json"} : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Não foi possível sincronizar.");
+    return result;
+  }
+
+  function hasDraft() {
+    return [...elements.grid.querySelectorAll(".add-topic-input")].some(input => input.value.trim());
+  }
+
+  async function sync(force = false) {
+    if (state.syncing || (!force && (state.busy || state.editing || hasDraft()))) return;
+    state.syncing = true;
+    try {
+      const {notes} = await request();
+      const data = {};
+      for (const note of notes) {
+        data[note.meal] ??= {};
+        data[note.meal][note.letter] ??= [];
+        data[note.meal][note.letter].push(note);
+      }
+      const snapshot = JSON.stringify(data);
+      const changed = snapshot !== state.snapshot || !state.connected;
+      state.data = data;
+      state.snapshot = snapshot;
+      state.connected = true;
+      connectionStatus("Anotações compartilhadas · Sincronizado");
+      if (changed || force) render();
+    } catch (error) {
+      state.connected = false;
+      connectionStatus("Sem conexão · Tente atualizar a página");
+      elements.grid.querySelectorAll(".add-topic-button").forEach(button => button.disabled = true);
+      if (force) announce(error.message);
+    } finally { state.syncing = false; }
+  }
+
+  async function write(method, body) {
+    if (state.busy) return false;
+    state.busy = true;
+    connectionStatus("Salvando para todos…");
+    elements.grid.querySelectorAll("button").forEach(button => button.disabled = true);
+    try {
+      await request(method, body);
+      return true;
+    } catch (error) {
+      announce(error.message);
+      return false;
+    } finally {
+      state.busy = false;
+      connectionStatus(state.connected ? "Anotações compartilhadas" : "Sem conexão");
+      elements.grid.querySelectorAll("button").forEach(button => button.disabled = false);
+    }
   }
 
   elements.nav.addEventListener("click", event => {
     const button = event.target.closest("[data-meal]");
-    if (!button) return;
+    if (!button || state.busy) return;
     state.meal = button.dataset.meal;
+    state.editing = false;
     render();
+    sync();
   });
 
-  elements.grid.addEventListener("submit", event => {
+  elements.grid.addEventListener("submit", async event => {
     const form = event.target.closest(".add-topic-form");
     if (!form) return;
     event.preventDefault();
     const input = form.elements.topic;
     const value = input.value.trim();
-    if (!value) { input.focus(); return; }
-    const items = itemsFor(form.dataset.meal, form.dataset.letter);
-    setTopics(form.dataset.meal, form.dataset.letter, [...items, value]);
-    const nextInput = elements.grid.querySelector(`form[data-meal="${form.dataset.meal}"][data-letter="${form.dataset.letter}"] input`);
-    nextInput?.focus();
-    announce("Tópico adicionado.");
+    if (!value || state.busy || !state.connected) return;
+    const meal = form.dataset.meal;
+    const letter = form.dataset.letter;
+    const added = await write("POST", {items: [{id: crypto.randomUUID(), meal, letter, text: value}]});
+    if (!added) return;
+    input.value = "";
+    await sync(true);
+    elements.grid.querySelector('form[data-letter="' + letter + '"] input')?.focus();
+    announce("Tópico adicionado para todos.");
   });
 
-  elements.grid.addEventListener("click", event => {
+  elements.grid.addEventListener("click", async event => {
     const button = event.target.closest("button[data-action]");
-    if (!button) return;
-    const { meal: mealId, letter, index, action } = button.dataset;
-    const items = [...itemsFor(mealId, letter)];
-    const itemIndex = Number(index);
+    if (!button || state.busy || !state.connected || state.editing) return;
+    const {meal, letter, index, action} = button.dataset;
+    const item = itemsFor(meal, letter)[Number(index)];
+    if (!item) return;
     if (action === "delete") {
-      const deleted = items.splice(itemIndex, 1);
-      setTopics(mealId, letter, items);
-      announce(deleted.length ? "Tópico excluído." : "");
+      if (await write("DELETE", {id: item.id, expectedText: item.text})) announce("Tópico excluído para todos.");
+      await sync(true);
       return;
     }
+    state.editing = true;
     const row = button.closest(".topic-row");
-    const current = items[itemIndex];
-    row.querySelector(".topic-text").innerHTML = `<input class="topic-edit" maxlength="240" value="${safeText(current)}" aria-label="Editar tópico" />`;
-    row.querySelector(".topic-actions").innerHTML = '<button class="mini-action save-edit" type="button" aria-label="Salvar tópico" title="Salvar"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3.2 3.2L13 4.5"/></svg></button>';
+    row.querySelector(".topic-text").innerHTML = '<input class="topic-edit" maxlength="240" value="' + safeText(item.text) + '" aria-label="Editar tópico" />';
+    row.querySelector(".topic-actions").innerHTML = '<button class="mini-action save-edit" type="button" aria-label="Salvar tópico" title="Salvar">✓</button><button class="mini-action cancel-edit" type="button" aria-label="Cancelar edição" title="Cancelar">×</button>';
     const input = row.querySelector(".topic-edit");
-    input.focus();
-    input.select();
-    const commit = () => {
-      const value = input.value.trim();
-      if (!value) { input.focus(); return; }
-      items[itemIndex] = value;
-      setTopics(mealId, letter, items);
-      announce("Tópico atualizado.");
+    input.focus(); input.select();
+    const commit = async () => {
+      const text = input.value.trim();
+      if (!text || state.busy) return;
+      if (await write("PATCH", {id: item.id, expectedText: item.text, text})) {
+        state.editing = false;
+        await sync(true);
+        announce("Tópico atualizado para todos.");
+      }
     };
-    row.querySelector(".save-edit").addEventListener("click", commit, { once: true });
-    input.addEventListener("keydown", keyEvent => {
-      if (keyEvent.key === "Enter") { keyEvent.preventDefault(); commit(); }
-      if (keyEvent.key === "Escape") render();
-    }, { once: true });
+    const cancel = () => { state.editing = false; render(); sync(); };
+    row.querySelector(".save-edit").addEventListener("click", commit);
+    row.querySelector(".cancel-edit").addEventListener("click", cancel);
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") { event.preventDefault(); commit(); }
+      if (event.key === "Escape") cancel();
+    });
+  });
+
+  // Sharing local notes is an explicit action, never an automatic upload.
+  const localItems = [];
+  for (const meal of meals) for (const letter of letters) {
+    for (const text of localNotes?.[meal.id]?.[letter] || []) {
+      if (typeof text === "string" && text.trim() && text.length <= 240) localItems.push({meal: meal.id, letter, text});
+    }
+  }
+  const importButton = document.querySelector("#import-local");
+  importButton.hidden = !localItems.length || localStorage.getItem("filipe-local-import-done") === "yes";
+  importButton.addEventListener("click", async () => {
+    if (state.busy || !state.connected) return;
+    let ids;
+    try { ids = JSON.parse(localStorage.getItem("filipe-local-import-ids") || "null"); } catch {}
+    if (!Array.isArray(ids) || ids.length !== localItems.length) {
+      ids = localItems.map(() => crypto.randomUUID());
+      localStorage.setItem("filipe-local-import-ids", JSON.stringify(ids));
+    }
+    for (let offset = 0; offset < localItems.length; offset += 500) {
+      const items = localItems.slice(offset, offset + 500).map((item, index) => ({...item, id: ids[offset + index]}));
+      if (!await write("POST", {items})) return;
+    }
+    localStorage.setItem("filipe-local-import-done", "yes");
+    importButton.hidden = true;
+    await sync(true);
+    announce("Anotações deste navegador compartilhadas com todos.");
   });
 
   render();
+  connectionStatus("Carregando anotações compartilhadas…");
+  sync(true);
+  window.setInterval(() => { if (!document.hidden) sync(); }, 10000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+  window.addEventListener("online", () => sync());
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {

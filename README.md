@@ -1,28 +1,18 @@
 # Anotações do Dia
 
-Site estático para organizar anotações em tópicos por período do dia.
+Anotações compartilhadas entre todas as pessoas que acessam a plataforma.
 
-## O que inclui
+- Quatro períodos: Café da manhã, Almoço, Café da tarde e Jantar.
+- Funções A, B, C e D, com tópicos em um registro contínuo.
+- Cada tópico é salvo separadamente no PostgreSQL para preservar inclusões simultâneas.
+- Atualização automática a cada 10 segundos enquanto a página está visível.
+- Alterações concorrentes do mesmo tópico são detectadas antes de sobrescrever dados.
+- Todos com o link podem ler, adicionar, editar e excluir; não há autenticação.
+- Anotações antigas permanecem no navegador e podem ser compartilhadas pelo botão de importação.
+- Sem conexão, não é possível salvar alterações compartilhadas.
 
-- Café da manhã, almoço, café da tarde e jantar.
-- Funções A, B, C e D em cada período.
-- Adição, edição e exclusão de tópicos.
-- Um único registro contínuo, sem divisão por datas.
-- Salvamento automático no navegador com `localStorage`.
-- Instalação no Android pela tela inicial e acesso offline após a primeira abertura.
+## Configuração na Vercel
 
-## Publicar na Vercel
+Conectar um banco Neon ao projeto, disponibilizando DATABASE_URL nas variáveis de ambiente do servidor. A API cria a tabela filipe_notes automaticamente. A credencial fica somente no servidor. Usar preset Other, raiz do repositório e saída public definida em vercel.json.
 
-1. Extraia este ZIP e envie os arquivos para a raiz do repositório GitHub.
-2. Na Vercel, conecte o repositório ou abra o projeto já conectado.
-3. Use a raiz do repositório como Root Directory e o preset `Other`.
-4. O arquivo `vercel.json` define `public` como diretório de saída. Não é necessário comando de build.
-5. Faça push para a branch de produção configurada na Vercel.
-
-## Armazenamento
-
-As anotações ficam salvas no perfil do navegador em que foram escritas. Elas continuam no mesmo navegador após fechar a página, mas não sincronizam automaticamente com outro navegador ou dispositivo. Para essa sincronização seria necessário um banco de dados online e autenticação.
-
-## Instalar no Android
-
-Depois de publicar o site em HTTPS, abra o endereço no Chrome do Android, toque no menu `⋮` e escolha **Instalar app** ou **Adicionar à tela inicial**. O ícone abre a plataforma em tela cheia. As anotações permanecem no armazenamento local desse navegador/aparelho e ficam disponíveis offline depois da primeira abertura.
+O site abre no navegador e pode ser instalado como PWA no Android.

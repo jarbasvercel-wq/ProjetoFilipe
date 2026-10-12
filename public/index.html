@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
-    <script src="/app.js?v=2" defer></script>
+    <script src="/app.js?v=3" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -36,7 +36,7 @@
           <span class="note-spark" aria-hidden="true">✳</span>
           <p>Pequenas anotações deixam o dia mais leve.</p>
         </div>
-        <div class="sidebar-footer"><span class="status-dot"></span> Salvo neste navegador</div>
+        <div class="sidebar-footer"><span class="status-dot"></span><span id="sync-status">Carregando anotações compartilhadas…</span></div>
       </aside>
 
       <main class="main-content" id="inicio">
@@ -63,10 +63,11 @@
           <div class="function-grid" id="function-grid"></div>
           <footer class="privacy-note">
             <span class="lock-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg></span>
-            <span>Suas anotações ficam salvas neste navegador.</span>
+            <span>Todos que acessam este link podem adicionar, editar e excluir tópicos.</span>
             <span class="privacy-separator">·</span>
             <span>Um único registro contínuo para suas anotações.</span>
           </footer>
+          <button id="import-local" class="today-button" type="button" hidden disabled>Compartilhar minhas anotações antigas deste navegador</button>
         </section>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </main>
