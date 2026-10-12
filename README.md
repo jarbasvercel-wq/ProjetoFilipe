@@ -7,7 +7,7 @@ Site estático para organizar anotações em tópicos por período do dia.
 - Café da manhã, almoço, café da tarde e jantar.
 - Funções A, B, C e D em cada período.
 - Adição, edição e exclusão de tópicos.
-- Navegação por data.
+- Um único registro contínuo, sem divisão por datas.
 - Salvamento automático no navegador com `localStorage`.
 - Instalação no Android pela tela inicial e acesso offline após a primeira abertura.
 

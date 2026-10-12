@@ -8,13 +8,12 @@
     { id: "dinner", label: "Jantar", icon: "☾", color: "#7d88a5" },
   ];
   const letters = ["A", "B", "C", "D"];
-  const storageKey = "meu-dia-notas-v1";
-  const state = { date: dateKey(new Date()), meal: meals[0].id, data: loadData(), toastTimer: null };
+  const storageKey = "meu-dia-notas-v2";
+  const state = { meal: meals[0].id, data: loadData(), toastTimer: null };
 
   const elements = {
     nav: document.querySelector("#meal-nav"),
     crumb: document.querySelector("#crumb-meal"),
-    date: document.querySelector("#date-label"),
     grid: document.querySelector("#function-grid"),
     title: document.querySelector("#section-title"),
     mealMiniIcon: document.querySelector("#meal-mini-icon"),
@@ -23,22 +22,31 @@
     toast: document.querySelector("#toast"),
   };
 
-  function dateKey(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  function parseDate(key) {
-    const [year, month, day] = key.split("-").map(Number);
-    return new Date(year, month - 1, day, 12);
-  }
-
   function loadData() {
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      return saved && typeof saved === "object" ? saved : {};
+      const current = localStorage.getItem(storageKey);
+      if (current !== null) {
+        const saved = JSON.parse(current);
+        return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+      }
+      const legacy = JSON.parse(localStorage.getItem("meu-dia-notas-v1") || "{}");
+      const merged = {};
+      // Keep every topic from the former daily records, including repeated topics.
+      for (const key of Object.keys(legacy || {}).sort()) {
+        const day = legacy[key];
+        for (const meal of meals) {
+          for (const letter of letters) {
+            const items = day?.[meal.id]?.[letter];
+            if (!Array.isArray(items)) continue;
+            merged[meal.id] ??= {};
+            merged[meal.id][letter] ??= [];
+            merged[meal.id][letter].push(...items);
+          }
+        }
+      }
+      // Keep the original storage as a backup if migration cannot be saved.
+      try { localStorage.setItem(storageKey, JSON.stringify(merged)); } catch {}
+      return merged;
     } catch {
       return {};
     }
@@ -53,13 +61,8 @@
     }
   }
 
-  function dayData(date = state.date) {
-    if (!state.data[date] || typeof state.data[date] !== "object") state.data[date] = {};
-    return state.data[date];
-  }
-
-  function itemsFor(mealId, letter, date = state.date) {
-    const items = dayData(date)?.[mealId]?.[letter];
+  function itemsFor(mealId, letter) {
+    const items = state.data?.[mealId]?.[letter];
     return Array.isArray(items) ? items : [];
   }
 
@@ -83,13 +86,6 @@
         <span class="meal-link-count">${navCounts(meal.id)}</span>
       </button>
     `).join("");
-  }
-
-  function renderDate() {
-    const date = parseDate(state.date);
-    elements.date.textContent = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(date).replace(" de ", " ").replace(" de ", " ");
-    const today = dateKey(new Date());
-    document.querySelector("#today-button").classList.toggle("is-today", state.date === today);
   }
 
   function actionIcon(kind) {
@@ -134,14 +130,12 @@
     elements.kicker.textContent = meal.label.toLocaleUpperCase("pt-BR");
     elements.grid.innerHTML = letters.map(letter => renderCard(meal, letter)).join("");
     elements.mealCount.textContent = plural(navCounts(meal.id), "tópico");
-    renderDate();
     renderNav();
   }
 
   function setTopics(mealId, letter, items) {
-    const date = dayData();
-    if (!date[mealId]) date[mealId] = {};
-    date[mealId][letter] = items;
+    if (!state.data[mealId]) state.data[mealId] = {};
+    state.data[mealId][letter] = items;
     saveData();
     render();
   }
@@ -205,23 +199,6 @@
       if (keyEvent.key === "Enter") { keyEvent.preventDefault(); commit(); }
       if (keyEvent.key === "Escape") render();
     }, { once: true });
-  });
-
-  document.querySelector("#prev-day").addEventListener("click", () => {
-    const date = parseDate(state.date);
-    date.setDate(date.getDate() - 1);
-    state.date = dateKey(date);
-    render();
-  });
-  document.querySelector("#next-day").addEventListener("click", () => {
-    const date = parseDate(state.date);
-    date.setDate(date.getDate() + 1);
-    state.date = dateKey(date);
-    render();
-  });
-  document.querySelector("#today-button").addEventListener("click", () => {
-    state.date = dateKey(new Date());
-    render();
   });
 
   render();
