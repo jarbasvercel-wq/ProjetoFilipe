@@ -155,3 +155,7 @@ h2 { margin-bottom: 0; font-family: Manrope, sans-serif; font-size: 23px; letter
 
 /* Functions and topics sit just below the meal title in size. */
 .function-title, .topic-row { font-size: 18px; }
+
+/* Black text throughout the function cards. */
+.function-card, .function-card .function-letter, .function-card .function-title, .function-card .topic-total, .function-card .topic-row, .function-card .empty-card, .function-card .empty-mark, .function-card .add-topic-input, .function-card .topic-edit, .function-card .mini-action { color: #000; }
+.function-card .add-topic-input::placeholder { color: #000; opacity: 1; }
