@@ -1,8 +1,8 @@
-const CACHE_NAME = "anotacoes-do-dia-v11";
+const CACHE_NAME = "anotacoes-do-dia-v12";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=5",
+  "/styles.css?v=6",
   "/app.js?v=4",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
